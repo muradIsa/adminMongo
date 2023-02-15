@@ -39,7 +39,7 @@ var currDocCounts = {
 exports.serverMonitoring = function (monitoringDB, dbs){
     if(dbs){
         Object.keys(dbs).forEach(function(key){
-            var adminDb = dbs[key].native.admin();
+            var adminDb = dbs[key].native.db('admin').admin();
             adminDb.serverStatus(function(err, info){
                 // if we got data back from db. If not, normally related to permissions
                 var dataRetrieved = false;
