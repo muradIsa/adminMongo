@@ -26,17 +26,18 @@ router.post('/database/:conn/db_create', function (req, res, next){
     }
 
     // Get DB form pool
-    var mongo_db = connection_list[req.params.conn].native.db(req.body.db_name);
+    var mongo_db = connection_list[req.params.conn].native;
 
     // adding a new collection to create the DB
-    mongo_db.collection('test').save({}, function (err, docs){
-        if(err){
+    mongo_db.collection('test').save({}).then(
+        function (docs){
+            res.status(200).json({'msg': req.i18n.__('Database successfully created')});
+        },
+        function (err){
             console.error('Error creating database: ' + err);
             res.status(400).json({'msg': req.i18n.__('Error creating database') + ': ' + err});
-        }else{
-            res.status(200).json({'msg': req.i18n.__('Database successfully created')});
         }
-    });
+    );
 });
 
 // delete a database
@@ -49,17 +50,18 @@ router.post('/database/:conn/db_delete', function (req, res, next){
     }
 
     // Get DB form pool
-    var mongo_db = connection_list[req.params.conn].native.db(req.body.db_name);
+    var mongo_db = connection_list[req.params.conn].native;
 
     // delete a collection
-    mongo_db.dropDatabase(function (err, result){
-        if(err){
+    mongo_db.dropDatabase().then(
+        function (result){
+            res.status(200).json({'msg': req.i18n.__('Database successfully deleted'), 'db_name': req.body.db_name});
+        },
+        function (err){
             console.error('Error deleting database: ' + err);
             res.status(400).json({'msg': req.i18n.__('Error deleting database') + ': ' + err});
-        }else{
-            res.status(200).json({'msg': req.i18n.__('Database successfully deleted'), 'db_name': req.body.db_name});
         }
-    });
+    );
 });
 
 // Backup a database

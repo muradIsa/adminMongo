@@ -44,7 +44,7 @@ function str(key, holder) {
     var partial;
     var value = holder[key];
 
-    if (value instanceof mongodb.ObjectID) {
+    if (value instanceof mongodb.ObjectId) {
         return 'ObjectId("' + value + '")';
     } else if (value instanceof mongodb.Timestamp) {
         return 'Timestamp(' + value.high_ + ', ' + value.low_ + ')';
@@ -62,7 +62,7 @@ function str(key, holder) {
         return 'MinKey()';
     } else if (value instanceof mongodb.MaxKey) {
         return 'MaxKey()';
-    } else if (value instanceof mongodb.Symbol) {
+    } else if (value instanceof mongodb.BSONSymbol) {
         return 'Symbol("' + value + '")';
     }
 

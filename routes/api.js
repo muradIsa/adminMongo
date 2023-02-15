@@ -54,12 +54,10 @@ router.post('/api/:conn/:db/:coll/:page', function (req, res, next){
         }
     }
 
-    mongo_db.collection(req.params.coll).find(query_obj, {skip: skip, limit: limit}).toArray(function (err, result){
-        if(err){
-            console.error(err);
-            res.status(500).json(err);
-        }else{
-            mongo_db.collection(req.params.coll).find({}, {skip: skip, limit: limit}).toArray(function (err, simpleSearchFields){
+    mongo_db.collection(req.params.coll).find(query_obj, {skip: skip, limit: limit}).toArray().then(
+        function (result){
+            mongo_db.collection(req.params.coll).find({}, {skip: skip, limit: limit}).toArray().then(
+                function (simpleSearchFields){
                 // get field names/keys of the Documents in collection
                 var fields = [];
                 for(var i = 0; i < simpleSearchFields.length; i++){
@@ -76,7 +74,7 @@ router.post('/api/:conn/:db/:coll/:page', function (req, res, next){
                 });
 
                 // get total num docs in query
-                mongo_db.collection(req.params.coll).count(query_obj, function (err, doc_count){
+                mongo_db.collection(req.params.coll).count(query_obj).then(function (doc_count){
                     var return_data = {
                         data: result,
                         fields: fields,
@@ -90,8 +88,12 @@ router.post('/api/:conn/:db/:coll/:page', function (req, res, next){
                     res.status(200).json(return_data);
                 });
             });
+        },
+        function (err){
+            console.error(err);
+            res.status(500).json(err);
         }
-    });
+    );
 });
 
 // Gets monitoring data
@@ -99,7 +101,8 @@ router.get('/api/monitoring/:conn', function (req, res, next){
     var dayBack = new Date();
     dayBack.setDate(dayBack.getDate() - 1);
 
-    req.db.find({connectionName: req.params.conn, eventDate: {$gte: dayBack}}).sort({eventDate: 1}).exec(function (err, serverEvents){
+    req.db.find({connectionName: req.params.conn, eventDate: {$gte: dayBack}}).sort({eventDate: 1}).exec().then(
+        function (serverEvents){
         var connectionsCurrent = [];
         var connectionsAvailable = [];
         var connectionsTotalCreated = [];
@@ -176,13 +179,13 @@ router.get('/api/monitoring/:conn', function (req, res, next){
                 uptime = uptime + ' minutes';
             }
 
-            if(err){
-                res.status(400).json({'msg': req.i18n.__('Could not get server monitoring')});
-            }else{
-                res.status(200).json({data: returnedData, dataRetrieved: serverEvents[0].dataRetrieved, pid: serverEvents[0].pid, version: serverEvents[0].version, uptime: uptime});
-            }
+            res.status(200).json({data: returnedData, dataRetrieved: serverEvents[0].dataRetrieved, pid: serverEvents[0].pid, version: serverEvents[0].version, uptime: uptime});
         }
-    });
+    },
+        function (err){
+            res.status(400).json({'msg': req.i18n.__('Could not get server monitoring')});
+        }
+    );
 });
 
 function averageDatapoints(datapoints, limit){

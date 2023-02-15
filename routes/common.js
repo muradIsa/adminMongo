@@ -1,6 +1,7 @@
 var _ = require('lodash');
 var fs = require('fs');
 var path = require('path');
+const async = require('async');
 
 // checks for the password in the /config/app.json file if it's set
 exports.checkLogin = function(req, res, next){
@@ -28,12 +29,10 @@ exports.checkLogin = function(req, res, next){
 // gets some db stats
 exports.get_db_status = function (mongo_db, cb){
     var adminDb = mongo_db.admin();
-    adminDb.serverStatus(function (err, status){
-        if(err){
-            cb('Error', null);
-        }else{
-            cb(null, status);
-        }
+    adminDb.serverStatus().then(function (status){
+        cb(null, status);
+    }, function (err){
+        cb('Error', null);
     });
 };
 
@@ -55,62 +54,60 @@ exports.get_db_stats = function (mongo_db, db_name, cb){
     // if at connection level we loop db's and collections
     if(db_name == null){
         var adminDb = mongo_db.admin();
-        adminDb.listDatabases(function (err, db_list){
-            if(err){
-                cb('User is not authorised', null);
-                return;
-            }
-            if(db_list !== undefined){
-                async.forEachOf(exports.order_object(db_list.databases), function (value, key, callback){
-                    exports.order_object(db_list.databases);
-                    var skipped_dbs = ['null', 'admin', 'local'];
-                    if(skipped_dbs.indexOf(value.name) === -1){
-                        var tempDBName = value.name;
-                        mongo_db.db(tempDBName).listCollections().toArray(function (err, coll_list){
-                            var coll_obj = {};
-                            async.forEachOf(exports.cleanCollections(coll_list), function (value, key, callback){
-                                mongo_db.db(tempDBName).collection(value).stats(function (err, coll_stat){
-                                    coll_obj[value] = {Storage: coll_stat.size, Documents: coll_stat.count};
+        adminDb.listDatabases().then(
+            function (db_list){
+                if(db_list !== undefined){
+                    async.forEachOf(exports.order_object(db_list.databases), function (value, key, callback){
+                        exports.order_object(db_list.databases);
+                        var skipped_dbs = ['null', 'admin', 'local'];
+                        if(skipped_dbs.indexOf(value.name) === -1){
+                            var tempDBName = value.name;
+                            mongo_db.s.client.db(tempDBName).listCollections().toArray().then(function (coll_list){
+                                var coll_obj = {};
+                                async.forEachOf(exports.cleanCollections(coll_list), function (value, key, callback){
+                                    mongo_db.s.client.db(tempDBName).collection(value).stats().then(function (coll_stat){
+                                        coll_obj[value] = {Storage: coll_stat.size, Documents: coll_stat.count};
+                                        callback();
+                                    });
+                                }, function (err){
+                                    console.error(err.message);
+                                    // add the collection object to the DB object with the DB as key
+                                    db_obj[value.name] = exports.order_object(coll_obj);
                                     callback();
                                 });
-                            }, function (err){
-                                if(err) console.error(err.message);
-                                // add the collection object to the DB object with the DB as key
-                                db_obj[value.name] = exports.order_object(coll_obj);
-                                callback();
                             });
-                        });
-                    }else{
-                        callback();
-                    }
-                }, function (err){
-                    if(err) console.error(err.message);
-                    // wrap this whole thing up
-                    cb(null, exports.order_object(db_obj));
-                });
-            }else{
-                // if doesnt have the access to get all DB's
-                cb(null, null);
+                        }else{
+                            callback();
+                        }
+                    }, function (err){
+                        if(err) console.error(err.message);
+                        // wrap this whole thing up
+                        cb(null, exports.order_object(db_obj));
+                    });
+                }else{
+                    // if doesnt have the access to get all DB's
+                    cb(null, null);
+                }
+            },
+            function (err){
+                cb('User is not authorised', null);
             }
-        });
+        );
         // if at DB level, we just grab the collections below
     }else{
-        mongo_db.db(db_name).listCollections().toArray(function (err, coll_list){
-            var coll_obj = {};
-            async.forEachOf(exports.cleanCollections(coll_list), function (value, key, callback){
-                mongo_db.db(db_name).collection(value).stats(function (err, coll_stat){
-                    coll_obj[value] = {
-                        Storage: coll_stat ? coll_stat.size : 0,
-                        Documents: coll_stat ? coll_stat.count : 0
-                    };
-
-                    callback();
-                });
-            }, function (err){
-                if(err) console.error(err.message);
-                db_obj[db_name] = exports.order_object(coll_obj);
-                cb(null, db_obj);
-            });
+        mongo_db.s.client.db(db_name).listCollections().toArray().then(async function (coll_list){
+            const coll_obj = {};
+            coll_list = exports.cleanCollections(coll_list);
+            for(var i = 0; i < coll_list.length; i++){
+                var value = coll_list[i];
+                var coll_stat = await mongo_db.s.client.db(db_name).collection(value).stats();
+                coll_obj[value] = {
+                    Storage: coll_stat ? coll_stat.size : 0,
+                    Documents: coll_stat ? coll_stat.count : 0
+                };
+            }
+            db_obj[db_name] = exports.order_object(coll_obj);
+            cb(null, db_obj);
         });
     }
 };
@@ -124,7 +121,7 @@ exports.get_db_list = function (uri, mongo_db, cb){
     // if a DB is not specified in the Conn string we try get a list
     if(uri.database === undefined || uri.database === null){
         // try go all admin and get the list of DB's
-        adminDb.listDatabases(function (err, db_list){
+        adminDb.listDatabases().then(function (db_list){
             if(db_list !== undefined){
                 async.forEachOf(db_list.databases, function (value, key, callback){
                     var skipped_dbs = ['null', 'admin', 'local'];
@@ -132,14 +129,14 @@ exports.get_db_list = function (uri, mongo_db, cb){
                         db_arr.push(value.name);
                     }
                     callback();
-                }, function (err){
-                    if(err) console.error(err.message);
-                    exports.order_array(db_arr);
-                    cb(null, db_arr);
                 });
             }else{
                 cb(null, null);
             }
+        }, function (err){
+            if(err) console.error(err.message);
+            exports.order_array(db_arr);
+            cb(null, db_arr);
         });
     }else{
         cb(null, null);
@@ -152,16 +149,18 @@ exports.get_db_list = function (uri, mongo_db, cb){
 // the value will be an ObjectId (hopefully) so we try that first then go from there
 exports.get_id_type = function (mongo, collection, doc_id, cb){
     if(doc_id){
-        var ObjectID = require('mongodb').ObjectID;
+        const { ObjectId } = require('mongodb');
         // if a valid ObjectId we try that, then then try as a string
-        if(ObjectID.isValid(doc_id)){
-            mongo.collection(collection).findOne({_id: ObjectID(doc_id)}, function (err, doc){
-                if(doc){
+        if(ObjectId.isValid(doc_id)){
+            mongo.collection(collection).findOne({_id: new ObjectId(doc_id)}).then(
+                function (doc){
+                    if(doc){
                     // doc_id is an ObjectId
-                    cb(null, {'doc_id_type': ObjectID(doc_id), 'doc': doc});
+                    cb(null, {'doc_id_type': new ObjectId(doc_id), 'doc': doc});
                 }else{
-                    mongo.collection(collection).findOne({_id: doc_id}, function (err, doc){
-                        if(doc){
+                    mongo.collection(collection).findOne({_id: doc_id}).then(
+                        function (doc){
+                            if(doc){
                             // doc_id is string
                             cb(null, {'doc_id_type': doc_id, 'doc': doc});
                         }else{
@@ -172,21 +171,23 @@ exports.get_id_type = function (mongo, collection, doc_id, cb){
             });
         }else{
             // if the value is not a valid ObjectId value we try as an integer then as a last resort, a string.
-            mongo.collection(collection).findOne({_id: parseInt(doc_id)}, function (err, doc){
-                if(doc){
-                    // doc_id is integer
-                    cb(null, {'doc_id_type': parseInt(doc_id), 'doc': doc});
-                    return;
-                }else{
-                    mongo.collection(collection).findOne({_id: doc_id}, function (err, doc){
-                        if(doc){
-                            // doc_id is string
-                            cb(null, {'doc_id_type': doc_id, 'doc': doc});
-                        }else{
-                            cb('Document not found', {'doc_id_type': null, 'doc': null});
-                        }
-                    });
-                }
+            mongo.collection(collection).findOne({_id: parseInt(doc_id)}).then(
+                function (doc){
+                    if(doc){
+                        // doc_id is integer
+                        cb(null, {'doc_id_type': parseInt(doc_id), 'doc': doc});
+                        return;
+                    }else{
+                        mongo.collection(collection).findOne({_id: doc_id}).then(
+                            function (err, doc){
+                                if(doc){
+                                    // doc_id is string
+                                    cb(null, {'doc_id_type': doc_id, 'doc': doc});
+                                }else{
+                                    cb('Document not found', {'doc_id_type': null, 'doc': null});
+                                }
+                            });
+                    }
             });
         }
     }else{
@@ -202,12 +203,12 @@ exports.get_sidebar_list = function (mongo_db, db_name, cb){
     // if no DB is specified, we get all DBs and collections
     if(db_name == null){
         var adminDb = mongo_db.admin();
-        adminDb.listDatabases(function (err, db_list){
+        adminDb.listDatabases().then(function (db_list){
             if(db_list){
                 async.forEachOf(db_list.databases, function (value, key, callback){
                     var skipped_dbs = ['null', 'admin', 'local'];
                     if(skipped_dbs.indexOf(value.name) === -1){
-                        mongo_db.db(value.name).listCollections().toArray(function (err, collections){
+                        mongo_db.s.client.db(value.name).listCollections().toArray().then(function (collections){
                             collections = exports.cleanCollections(collections);
                             exports.order_array(collections);
                             db_obj[value.name] = collections;
@@ -225,7 +226,7 @@ exports.get_sidebar_list = function (mongo_db, db_name, cb){
             }
         });
     }else{
-        mongo_db.db(db_name).listCollections().toArray(function (err, collections){
+        mongo_db.s.client.db(db_name).listCollections().toArray().then(function (collections){
             collections = exports.cleanCollections(collections);
             exports.order_array(collections);
             db_obj[db_name] = collections;

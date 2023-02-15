@@ -27,14 +27,15 @@ router.post('/collection/:conn/:db/coll_create', function (req, res, next){
     var mongo_db = connection_list[req.params.conn].native.db(req.params.db);
 
     // adding a new collection
-    mongo_db.createCollection(req.body.collection_name, function (err, coll){
-        if(err){
+    mongo_db.createCollection(req.body.collection_name).then(
+        function (coll){
+            res.status(200).json({'msg': req.i18n.__('Collection successfully created')});
+        },
+        function (err){
             console.error('Error creating collection: ' + err);
             res.status(400).json({'msg': req.i18n.__('Error creating collection') + ': ' + err});
-        }else{
-            res.status(200).json({'msg': req.i18n.__('Collection successfully created')});
         }
-    });
+    );
 });
 
 // Rename an existing collection
@@ -56,14 +57,15 @@ router.post('/collection/:conn/:db/:coll/coll_name_edit', function (req, res, ne
     var mongo_db = connection_list[req.params.conn].native.db(req.params.db);
 
     // change a collection name
-    mongo_db.collection(req.params.coll).rename(req.body.new_collection_name, {'dropTarget': false}, function (err, coll_name){
-        if(err){
+    mongo_db.collection(req.params.coll).rename(req.body.new_collection_name, {'dropTarget': false}).then(
+        function (coll_name){
+            res.status(200).json({'msg': req.i18n.__('Collection successfully renamed')});
+        },
+        function (err){
             console.error('Error renaming collection: ' + err);
             res.status(400).json({'msg': req.i18n.__('Error renaming collection') + ': ' + err});
-        }else{
-            res.status(200).json({'msg': req.i18n.__('Collection successfully renamed')});
         }
-    });
+    );
 });
 
 // Delete a collection
@@ -85,14 +87,15 @@ router.post('/collection/:conn/:db/coll_delete', function (req, res, next){
     var mongo_db = connection_list[req.params.conn].native.db(req.params.db);
 
     // delete a collection
-    mongo_db.dropCollection(req.body.collection_name, function (err, coll){
-        if(err){
+    mongo_db.dropCollection(req.body.collection_name).then(
+        function (coll){
+            res.status(200).json({'msg': req.i18n.__('Collection successfully deleted'), 'coll_name': req.body.collection_name});
+        },
+        function (err){
             console.error('Error deleting collection: ' + err);
             res.status(400).json({'msg': req.i18n.__('Error deleting collection') + ': ' + err});
-        }else{
-            res.status(200).json({'msg': req.i18n.__('Collection successfully deleted'), 'coll_name': req.body.collection_name});
         }
-    });
+    );
 });
 
 // Exports a collection
@@ -120,7 +123,7 @@ router.get('/collection/:conn/:db/:coll/export/:excludedID?', function (req, res
     // Get DB's form pool
     var mongo_db = connection_list[req.params.conn].native.db(req.params.db);
 
-    mongo_db.collection(req.params.coll).find({}, exportID).toArray(function (err, data){
+    mongo_db.collection(req.params.coll).find({}, exportID).toArray().then(function (data){
         if(data !== ''){
             res.set({'Content-Disposition': 'attachment; filename=' + req.params.coll + '.json'});
             res.send(JSON.stringify(data, null, 2));
@@ -152,14 +155,15 @@ router.post('/collection/:conn/:db/:coll/create_index', function (req, res, next
     var unique_bool = (req.body[1] === 'true');
     var sparse_bool = (req.body[2] === 'true');
     var options = {unique: unique_bool, background: true, sparse: sparse_bool};
-    mongo_db.collection(req.params.coll).createIndex(JSON.parse(req.body[0]), options, function (err, index){
-        if(err){
+    mongo_db.collection(req.params.coll).createIndex(JSON.parse(req.body[0]), options).then(
+        function (index){
+            res.status(200).json({'msg': req.i18n.__('Index successfully created')});
+        },
+        function (err){
             console.error('Error creating index: ' + err);
             res.status(400).json({'msg': req.i18n.__('Error creating Index') + ': ' + err});
-        }else{
-            res.status(200).json({'msg': req.i18n.__('Index successfully created')});
         }
-    });
+    );
 });
 
 // Drops an existing collection index
@@ -181,15 +185,16 @@ router.post('/collection/:conn/:db/:coll/drop_index', function (req, res, next){
     var mongo_db = connection_list[req.params.conn].native.db(req.params.db);
 
     // adding a new index
-    mongo_db.collection(req.params.coll).indexes(function (err, indexes){
-        mongo_db.collection(req.params.coll).dropIndex(indexes[req.body.index].name, function (err, index){
-            if(err){
+    mongo_db.collection(req.params.coll).indexes().then(function (indexes){
+        mongo_db.collection(req.params.coll).dropIndex(indexes[req.body.index].name).then(
+            function (index){
+                res.status(200).json({'msg': req.i18n.__('Index successfully dropped')});
+            },
+            function (err){
                 console.error('Error dropping Index: ' + err);
                 res.status(400).json({'msg': req.i18n.__('Error dropping Index') + ': ' + err});
-            }else{
-                res.status(200).json({'msg': req.i18n.__('Index successfully dropped')});
             }
-        });
+        );
     });
 });
 
