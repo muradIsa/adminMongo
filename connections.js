@@ -9,19 +9,17 @@ exports.addConnection = function (connection, app, callback){
         connection.connOptions = {};
     }
 
-    MongoClient.connect(connection.connString, connection.connOptions, function(err, database){
-        if(err){
-            callback(err, null);
-        }else{
-            var dbObj = {};
-            dbObj.native = database;
-            dbObj.connString = connection.connString;
-            dbObj.connOptions = connection.connOptions;
+    MongoClient.connect(connection.connString, connection.connOptions).then(function( database){
+        var dbObj = {};
+        dbObj.native = database;
+        dbObj.connString = connection.connString;
+        dbObj.connOptions = connection.connOptions;
 
-            app.locals.dbConnections[connection.connName] = null;
-            app.locals.dbConnections[connection.connName] = dbObj;
-            callback(null, null);
-        }
+        app.locals.dbConnections[connection.connName] = null;
+        app.locals.dbConnections[connection.connName] = dbObj;
+        callback(null, null);
+    }, function(err){
+        callback(err, null);
     });
 };
 
