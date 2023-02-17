@@ -9,11 +9,12 @@ exports.addConnection = function (connection, app, callback){
         connection.connOptions = {};
     }
 
-    MongoClient.connect(connection.connString, connection.connOptions).then(function( database){
+    MongoClient.connect(connection.connString, connection.connOptions).then(function(database){
         var dbObj = {};
         dbObj.native = database;
         dbObj.connString = connection.connString;
         dbObj.connOptions = connection.connOptions;
+        dbObj.db = (connection.connString.match(/mongodb:\/\/[\d.]+:\d+\/(.+)$/) || [])[1] || null;
 
         app.locals.dbConnections[connection.connName] = null;
         app.locals.dbConnections[connection.connName] = dbObj;

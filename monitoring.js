@@ -39,53 +39,55 @@ var currDocCounts = {
 exports.serverMonitoring = function (monitoringDB, dbs){
     if(dbs){
         Object.keys(dbs).forEach(function(key){
-            var adminDb = dbs[key].native.db('admin').admin();
-            adminDb.serverStatus(function(err, info){
-                // if we got data back from db. If not, normally related to permissions
-                var dataRetrieved = false;
-                if(info){
-                    dataRetrieved = true;
-                }
+            if(dbs[key].db){
+                var adminDb = dbs[key].native.db(dbs[key].db).admin();
+                adminDb.serverStatus(function(err, info){
+                    // if we got data back from db. If not, normally related to permissions
+                    var dataRetrieved = false;
+                    if(info){
+                        dataRetrieved = true;
+                    }
 
-                // doc numbers. We get the last interval number and subtract the current to get the diff
-                var docCounts = '';
-                var activeClients = '';
-                var pid = 'N/A';
-                var version = 'N/A';
-                var uptime = 'N/A';
-                var connections = '';
-                var memory = '';
+                    // doc numbers. We get the last interval number and subtract the current to get the diff
+                    var docCounts = '';
+                    var activeClients = '';
+                    var pid = 'N/A';
+                    var version = 'N/A';
+                    var uptime = 'N/A';
+                    var connections = '';
+                    var memory = '';
 
-                // set the values if we can get them
-                if(info){
-                    docCounts = info.metrics ? getDocCounts(currDocCounts, info.metrics.document) : 0;
-                    activeClients = info.globalLock ? info.globalLock.activeClients : 0;
-                    pid = info.pid;
-                    version = info.version;
-                    uptime = info.uptime;
-                    connections = info.connections;
-                    memory = info.mem;
-                }
+                    // set the values if we can get them
+                    if(info){
+                        docCounts = info.metrics ? getDocCounts(currDocCounts, info.metrics.document) : 0;
+                        activeClients = info.globalLock ? info.globalLock.activeClients : 0;
+                        pid = info.pid;
+                        version = info.version;
+                        uptime = info.uptime;
+                        connections = info.connections;
+                        memory = info.mem;
+                    }
 
-                var doc = {
-                    eventDate: new Date(),
-                    pid: pid,
-                    version: version,
-                    uptime: uptime,
-                    activeClients: activeClients,
-                    connectionName: key,
-                    connections: connections,
-                    memory: memory,
-                    dataRetrieved: dataRetrieved,
-                    docCounts: docCounts
-                };
+                    var doc = {
+                        eventDate: new Date(),
+                        pid: pid,
+                        version: version,
+                        uptime: uptime,
+                        activeClients: activeClients,
+                        connectionName: key,
+                        connections: connections,
+                        memory: memory,
+                        dataRetrieved: dataRetrieved,
+                        docCounts: docCounts
+                    };
 
-                // insert the data into local DB
-                monitoringDB.insert(doc, function (err, newDoc){});
+                    // insert the data into local DB
+                    monitoringDB.insert(doc, function (err, newDoc){});
 
-                // clean up old docs
-                serverMonitoringCleanup(monitoringDB, key);
-            });
+                    // clean up old docs
+                    serverMonitoringCleanup(monitoringDB, key);
+                });
+            }
         });
     }
 };
